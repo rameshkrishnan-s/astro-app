@@ -15,4 +15,10 @@ export const API_ENDPOINTS = {
   },
 };
 
+// Location API endpoints (OpenStreetMap Nominatim)
+export const LOCATION_API = {
+  SEARCH: 'https://nominatim.openstreetmap.org/search',
+  REVERSE: 'https://nominatim.openstreetmap.org/reverse',
+};
+
 export default API_BASE_URL; 

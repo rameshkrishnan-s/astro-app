@@ -1,138 +1,180 @@
-// astrology-backend/routes/astrology.js (MOCK VERSION FOR TESTING)
+// astrology-backend/routes/astrology.js (API KEY AUTHENTICATION)
 
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
 const AstrologyData = require('../models/AstrologyData');
+const axios = require('axios');
 
-// Mock data generator for testing
-const generateMockAstrologyData = (fullName, dateOfBirth, timeOfBirth, gender) => {
-  const rasis = ['Aries', 'Taurus', 'Gemini', 'Cancer', 'Leo', 'Virgo', 'Libra', 'Scorpio', 'Sagittarius', 'Capricorn', 'Aquarius', 'Pisces'];
-  const nakshatras = ['Ashwini', 'Bharani', 'Krittika', 'Rohini', 'Mrigashira', 'Ardra', 'Punarvasu', 'Pushya', 'Ashlesha', 'Magha', 'Purva Phalguni', 'Uttara Phalguni'];
-  const planets = ['Sun', 'Moon', 'Mars', 'Mercury', 'Jupiter', 'Venus', 'Saturn', 'Rahu', 'Ketu'];
-  
-  const randomRasi = rasis[Math.floor(Math.random() * rasis.length)];
-  const randomNakshatra = nakshatras[Math.floor(Math.random() * nakshatras.length)];
-  
-  const rasiPlanets = planets.map(planet => ({
-    name: planet,
-    sign: rasis[Math.floor(Math.random() * rasis.length)],
-    house: Math.floor(Math.random() * 12) + 1,
-  }));
-  
-  const navamsaPlanets = planets.map(planet => ({
-    name: planet,
-    sign: rasis[Math.floor(Math.random() * rasis.length)],
-    house: Math.floor(Math.random() * 12) + 1,
-  }));
+// Prokerala API configuration
+const PROKERALA_BASE_URL = 'https://api.prokerala.com/v2/astrology';
 
-  return {
-    rasi: randomRasi,
-    nakshatra: randomNakshatra,
-    rasiPlanets,
-    navamsaPlanets,
-    rasiChartSvg: `<svg width="400" height="400" xmlns="http://www.w3.org/2000/svg">
-      <rect width="400" height="400" fill="#f0f0f0" stroke="#333" stroke-width="2"/>
-      <text x="200" y="50" text-anchor="middle" font-size="20" font-weight="bold">Rasi Chart</text>
-      <text x="200" y="80" text-anchor="middle" font-size="16">${randomRasi}</text>
-      <text x="200" y="110" text-anchor="middle" font-size="14">${randomNakshatra}</text>
-      <text x="200" y="200" text-anchor="middle" font-size="12">Generated for: ${fullName}</text>
-      <text x="200" y="220" text-anchor="middle" font-size="12">Date: ${new Date(dateOfBirth).toLocaleDateString()}</text>
-      <text x="200" y="240" text-anchor="middle" font-size="12">Time: ${timeOfBirth}</text>
-      <text x="200" y="260" text-anchor="middle" font-size="12">Gender: ${gender === 'm' ? 'Male' : 'Female'}</text>
-    </svg>`,
-    navamsaChartSvg: `<svg width="400" height="400" xmlns="http://www.w3.org/2000/svg">
-      <rect width="400" height="400" fill="#e0f0ff" stroke="#333" stroke-width="2"/>
-      <text x="200" y="50" text-anchor="middle" font-size="20" font-weight="bold">Navamsa Chart</text>
-      <text x="200" y="80" text-anchor="middle" font-size="16">${randomRasi}</text>
-      <text x="200" y="110" text-anchor="middle" font-size="14">${randomNakshatra}</text>
-      <text x="200" y="200" text-anchor="middle" font-size="12">Generated for: ${fullName}</text>
-      <text x="200" y="220" text-anchor="middle" font-size="12">Date: ${new Date(dateOfBirth).toLocaleDateString()}</text>
-      <text x="200" y="240" text-anchor="middle" font-size="12">Time: ${timeOfBirth}</text>
-      <text x="200" y="260" text-anchor="middle" font-size="12">Gender: ${gender === 'm' ? 'Male' : 'Female'}</text>
-    </svg>`
-  };
+// Helper function to format datetime for Prokerala API (ISO 8601 with timezone)
+const formatDateTimeForAPI = (dateOfBirth, timeOfBirth) => {
+  const date = new Date(dateOfBirth);
+  const [hours, minutes] = timeOfBirth.split(':');
+  date.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+  
+  // Convert to ISO 8601 format with timezone (IST: +05:30)
+  const isoString = date.toISOString().replace('Z', '+05:30');
+  return encodeURIComponent(isoString);
 };
 
-// @desc    Calculate and save astrology data for a user (MOCK VERSION)
+// Helper to call Prokerala API with API key authentication
+const callProkeralaAPI = async (endpoint, params) => {
+  const url = `${PROKERALA_BASE_URL}/${endpoint}?${params}`;
+  console.log('Making API request to:', url); // Debug log
+  
+  const response = await axios.get(url, {
+    headers: {
+      'Authorization': `Bearer ${process.env.PROKERALA_API_KEY}`,
+      'Accept': 'application/json'
+    }
+  });
+  return response.data;
+};
+
+// Helper to get planet positions for a specific chart type
+const getPlanetPositions = async (dateOfBirth, timeOfBirth, chartType = 'rasi', ayanamsa = 1) => {
+  const coords = '13.0827,80.2707'; // Default to Chennai, India
+  const datetime = formatDateTimeForAPI(dateOfBirth, timeOfBirth);
+  const params = new URLSearchParams({
+    ayanamsa: ayanamsa.toString(),
+    coordinates: coords,
+    datetime: datetime,
+    chart_type: chartType,
+    chart_style: 'south-indian',
+    format: 'svg',
+    la: 'en'
+  });
+  
+  return await callProkeralaAPI('planet-position', params);
+};
+
+// Helper to get chart SVG from Prokerala
+const getChartSVG = async (dateOfBirth, timeOfBirth, chartType = 'rasi', ayanamsa = 1) => {
+  const coords = '13.0827,80.2707'; // Use real coordinates if available
+  const date = new Date(dateOfBirth);
+  const [hours, minutes] = timeOfBirth.split(':');
+  date.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+  const datetime = encodeURIComponent(date.toISOString());
+  const params = new URLSearchParams({
+    ayanamsa: ayanamsa.toString(),
+    coordinates: coords,
+    datetime,
+    chart_type: chartType,
+    chart_style: 'south-indian',
+    format: 'svg',
+    la: 'en'
+  });
+  const url = `https://api.prokerala.com/v2/astrology/chart?${params}`;
+  const response = await axios.get(url, {
+    headers: {
+      'Authorization': `Bearer ${process.env.PROKERALA_API_KEY}`,
+      'Accept': 'application/xml'
+    }
+  });
+  return response.data; // SVG string
+};
+
+// Helper to get basic horoscope information (using planet-position with rasi chart)
+const getBasicHoroscope = async (dateOfBirth, timeOfBirth, ayanamsa = 1) => {
+  try {
+    // Get planet positions for rasi chart to extract basic info
+    const planetData = await getPlanetPositions(dateOfBirth, timeOfBirth, 'rasi', ayanamsa);
+    
+    // Extract basic information from planet positions
+    const ascendant = planetData.ascendant?.sign || 'Unknown';
+    const rasi = planetData.rasi?.name || 'Unknown';
+    const nakshatra = planetData.nakshatra?.name || 'Unknown';
+    
+    return {
+      rasi,
+      nakshatra,
+      ascendant,
+      planets: planetData.planets || []
+    };
+  } catch (error) {
+    console.error('Error getting basic horoscope:', error);
+    throw error;
+  }
+};
+
+// @desc    Calculate and save astrology data using Prokerala API
 // @route   POST /api/astrology/calculate
 // @access  Private
 router.post('/calculate', protect, async (req, res) => {
-    try {
-        const { fullName, dateOfBirth, timeOfBirth, placeOfBirth, gender } = req.body;
-        
-        console.log('Received astrology calculation request:', {
-            fullName,
-            dateOfBirth,
-            timeOfBirth,
-            placeOfBirth,
-            gender,
-            userId: req.user.id
-        });
-        
-        // Validate required fields
-        if (!fullName || !dateOfBirth || !timeOfBirth || !placeOfBirth || !gender) {
-            return res.status(400).json({ 
-                msg: 'All fields are required: fullName, dateOfBirth, timeOfBirth, placeOfBirth, gender' 
-            });
-        }
+  try {
+    const { fullName, dateOfBirth, timeOfBirth, placeOfBirth, gender } = req.body;
 
-        // Validate gender
-        if (!['m', 'f'].includes(gender)) {
-            return res.status(400).json({ msg: 'Gender must be either "m" or "f"' });
-        }
-
-        // Generate mock astrology data
-        const mockData = generateMockAstrologyData(fullName, dateOfBirth, timeOfBirth, gender);
-        
-        console.log('Generated mock data:', mockData);
-        
-        // Save to our database
-        const newAstrologyEntry = new AstrologyData({
-            user: req.user.id,
-            fullName, 
-            dateOfBirth, 
-            timeOfBirth, 
-            placeOfBirth, 
-            gender,
-            rasi: mockData.rasi,
-            nakshatra: mockData.nakshatra,
-            rasiPlanets: mockData.rasiPlanets,
-            navamsaPlanets: mockData.navamsaPlanets,
-            rasiChartSvg: mockData.rasiChartSvg,
-            navamsaChartSvg: mockData.navamsaChartSvg,
-            prokeralaApiResponse: {
-                rasi: { message: 'Mock data generated for testing' },
-                navamsa: { message: 'Mock data generated for testing' }
-            },
-        });
-
-        const savedData = await newAstrologyEntry.save();
-        console.log('Saved astrology data to database:', savedData._id);
-        
-        // Return a clean response to the frontend
-        res.status(201).json({
-            success: true,
-            data: {
-                id: savedData._id,
-                fullName: savedData.fullName,
-                rasi: savedData.rasi,
-                nakshatra: savedData.nakshatra,
-                rasiPlanets: savedData.rasiPlanets,
-                navamsaPlanets: savedData.navamsaPlanets,
-                rasiChartSvg: savedData.rasiChartSvg,
-                navamsaChartSvg: savedData.navamsaChartSvg,
-            }
-        });
-
-    } catch (err) {
-        console.error('Astrology calculation error:', err);
-        
-        res.status(500).json({ 
-            msg: 'Server Error', 
-            error: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error'
-        });
+    // Validate required fields
+    if (!fullName || !dateOfBirth || !timeOfBirth || !gender) {
+      return res.status(400).json({
+        msg: 'Required fields missing: fullName, dateOfBirth, timeOfBirth, gender'
+      });
     }
+    if (!['m', 'f', 'o'].includes(gender)) {
+      return res.status(400).json({ msg: 'Gender must be either "m", "f", or "o"' });
+    }
+    if (!process.env.PROKERALA_API_KEY) {
+      return res.status(500).json({
+        msg: 'Prokerala API is not configured. Please set PROKERALA_API_KEY in environment variables.'
+      });
+    }
+
+    // Get SVG charts from Prokerala
+    const rasiChartSvg = await getChartSVG(dateOfBirth, timeOfBirth, 'rasi');
+    const navamsaChartSvg = await getChartSVG(dateOfBirth, timeOfBirth, 'navamsa');
+
+    // You can add logic here to get rasi/nakshatra from another Prokerala endpoint if needed
+    // For now, use placeholders or parse from the SVG if possible
+    const rasi = 'கன்னி'; // Placeholder, replace with real value if available
+    const nakshatra = 'ஹஸ்தம்'; // Placeholder, replace with real value if available
+
+    // Save to database
+    const newAstrologyEntry = new AstrologyData({
+      user: req.user.id,
+      fullName,
+      dateOfBirth,
+      timeOfBirth,
+      placeOfBirth: placeOfBirth || 'Chennai, India',
+      gender,
+      rasi,
+      nakshatra,
+      rasiChartSvg,
+      navamsaChartSvg
+    });
+
+    const savedData = await newAstrologyEntry.save();
+
+    // Return response matching your API documentation
+    res.status(201).json({
+      success: true,
+      data: {
+        _id: savedData._id,
+        user: savedData.user,
+        fullName: savedData.fullName,
+        dateOfBirth: savedData.dateOfBirth,
+        timeOfBirth: savedData.timeOfBirth,
+        placeOfBirth: savedData.placeOfBirth,
+        gender: savedData.gender,
+        rasiChartSvg: savedData.rasiChartSvg,
+        navamsaChartSvg: savedData.navamsaChartSvg,
+        rasi: savedData.rasi,
+        nakshatra: savedData.nakshatra,
+        createdAt: savedData.createdAt,
+        updatedAt: savedData.updatedAt,
+        __v: savedData.__v
+      }
+    });
+
+  } catch (err) {
+    console.error('Astrology calculation error:', err);
+    res.status(500).json({
+      msg: 'Server Error',
+      error: err.message
+    });
+  }
 });
 
 module.exports = router;

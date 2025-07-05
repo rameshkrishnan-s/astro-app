@@ -23,7 +23,12 @@
   "devDependencies": {
     "nodemon": "^3.1.10"
   },
-  "keywords": ["astrology", "api", "nodejs", "express"],
+  "keywords": [
+    "astrology",
+    "api",
+    "nodejs",
+    "express"
+  ],
   "author": "",
   "license": "ISC"
 }

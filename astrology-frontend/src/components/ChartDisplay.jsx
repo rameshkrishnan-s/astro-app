@@ -1,7 +1,7 @@
-// src/components/ChartDisplay.jsx
+// src/components/ChartDisplay.jsx (UPDATED FOR REAL PROKERALA API)
 
 import React, { useState } from 'react';
-import { Tabs, Tab, Box, Typography } from '@mui/material';
+import { Tabs, Tab, Box, Typography, Alert, Chip } from '@mui/material';
 import PropTypes from 'prop-types';
 
 // Unicode symbols for Rasi (zodiac) signs
@@ -100,14 +100,136 @@ const ChartDisplay = ({ astrologyResult }) => {
   
   if (!astrologyResult) return null;
 
-  const { fullName, rasi, nakshatra, dateOfBirth, timeOfBirth, placeOfBirth, rasiPlanets, navamsaPlanets } = astrologyResult;
-  const ascendantHouse = 1; // For mock, just use house 1 as ascendant
+  const { 
+    fullName, 
+    rasi, 
+    nakshatra, 
+    ascendant,
+    dateOfBirth, 
+    timeOfBirth, 
+    placeOfBirth, 
+    rasiPlanets, 
+    navamsaPlanets,
+    rasiChartSvg,
+    navamsaChartSvg,
+    apiSource
+  } = astrologyResult;
 
   const handleTabChange = (event, newValue) => {
     setTabValue(newValue);
   };
 
-  const renderChart = (planets, chartType = 'rasi') => {
+  // Render Prokerala SVG chart
+  const renderProkeralaChart = (svgData, chartType) => {
+    if (!svgData) return null;
+
+    return (
+      <Box sx={{ 
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 2
+      }}>
+        <Box sx={{
+          border: '2px solid #e0e3e7',
+          borderRadius: '12px',
+          overflow: 'hidden',
+          background: '#fff',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+          maxWidth: '100%',
+          '& svg': {
+            maxWidth: '100%',
+            height: 'auto'
+          }
+        }}>
+          <div dangerouslySetInnerHTML={{ __html: svgData }} />
+        </Box>
+        
+        {/* Chart details */}
+        <Box sx={{ 
+          display: 'flex', 
+          flexWrap: 'wrap', 
+          gap: 1, 
+          justifyContent: 'center',
+          mt: 2
+        }}>
+          <Chip 
+            label={`Rasi: ${rasi}`} 
+            color="primary" 
+            variant="outlined" 
+            size="small" 
+          />
+          <Chip 
+            label={`Nakshatra: ${nakshatra}`} 
+            color="secondary" 
+            variant="outlined" 
+            size="small" 
+          />
+          {ascendant && (
+            <Chip 
+              label={`Ascendant: ${ascendant}`} 
+              color="info" 
+              variant="outlined" 
+              size="small" 
+            />
+          )}
+        </Box>
+
+        {/* Planet positions table */}
+        {rasiPlanets && rasiPlanets.length > 0 && (
+          <Box sx={{ 
+            mt: 3, 
+            width: '100%', 
+            maxWidth: '600px',
+            background: '#f8f9fa',
+            borderRadius: '8px',
+            p: 2
+          }}>
+            <Typography variant="h6" sx={{ mb: 2, textAlign: 'center', color: '#333' }}>
+              Planet Positions ({chartType === 'rasi' ? 'Rasi' : 'Navamsa'})
+            </Typography>
+            <Box sx={{ 
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+              gap: 1
+            }}>
+              {(chartType === 'rasi' ? rasiPlanets : navamsaPlanets)?.map((planet, index) => (
+                <Box key={index} sx={{
+                  background: '#fff',
+                  p: 1.5,
+                  borderRadius: '6px',
+                  border: '1px solid #e0e3e7',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}>
+                  <Box sx={{ fontWeight: 600, color: '#333' }}>
+                    {planet.name}
+                  </Box>
+                  <Box sx={{ textAlign: 'right' }}>
+                    <Box sx={{ fontSize: '0.9rem', color: '#666' }}>
+                      {planet.sign} {planet.degree}°
+                    </Box>
+                    <Box sx={{ fontSize: '0.8rem', color: '#888' }}>
+                      House {planet.house}
+                    </Box>
+                    {planet.isRetrograde && (
+                      <Box sx={{ fontSize: '0.7rem', color: '#d32f2f', fontStyle: 'italic' }}>
+                        Retrograde
+                      </Box>
+                    )}
+                  </Box>
+                </Box>
+              ))}
+            </Box>
+          </Box>
+        )}
+      </Box>
+    );
+  };
+
+  // Render custom chart (fallback)
+  const renderCustomChart = (planets, chartType = 'rasi') => {
     return (
       <Box sx={{ 
         display: 'inline-block',
@@ -170,6 +292,9 @@ const ChartDisplay = ({ astrologyResult }) => {
                     </Box>
                     <Box sx={{ mt: 1, fontWeight: 700, color: '#6a11cb' }}>{rasi}</Box>
                     <Box sx={{ fontStyle: 'italic', color: '#666' }}>{nakshatra}</Box>
+                    {ascendant && (
+                      <Box sx={{ fontSize: '0.8rem', color: '#666' }}>Asc: {ascendant}</Box>
+                    )}
                     <Box sx={{ 
                       mt: 1, 
                       fontWeight: 700, 
@@ -190,7 +315,7 @@ const ChartDisplay = ({ astrologyResult }) => {
             // House cell
             const sign = getHouseSign(planets, house);
             const planetList = getHousePlanets(planets, house);
-            const isAsc = house === ascendantHouse && chartType === 'rasi';
+            const isAsc = house === 1 && chartType === 'rasi';
             
             return (
               <Box
@@ -282,7 +407,14 @@ const ChartDisplay = ({ astrologyResult }) => {
   };
 
   return (
-    <Box sx={{ width: '100%', maxWidth: '800px', mx: 'auto' }}>
+    <Box sx={{ width: '100%', maxWidth: '1000px', mx: 'auto' }}>
+      {/* API Source indicator */}
+      {apiSource && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          Chart generated using {apiSource} API with real astronomical calculations
+        </Alert>
+      )}
+
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
         <Tabs 
           value={tabValue} 
@@ -308,12 +440,20 @@ const ChartDisplay = ({ astrologyResult }) => {
           <Tab label="Navamsa Chart" {...a11yProps(1)} />
         </Tabs>
       </Box>
+      
       <TabPanel value={tabValue} index={0}>
-        {renderChart(rasiPlanets, 'rasi')}
+        {rasiChartSvg ? (
+          renderProkeralaChart(rasiChartSvg, 'rasi')
+        ) : (
+          renderCustomChart(rasiPlanets, 'rasi')
+        )}
       </TabPanel>
+      
       <TabPanel value={tabValue} index={1}>
-        {navamsaPlanets && navamsaPlanets.length > 0 ? (
-          renderChart(navamsaPlanets, 'navamsa')
+        {navamsaChartSvg ? (
+          renderProkeralaChart(navamsaChartSvg, 'navamsa')
+        ) : navamsaPlanets && navamsaPlanets.length > 0 ? (
+          renderCustomChart(navamsaPlanets, 'navamsa')
         ) : (
           <Box sx={{ 
             textAlign: 'center', 
